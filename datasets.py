@@ -18,6 +18,89 @@ from transforms import Construct
 
 logger = logging.getLogger("Dataset")
 
+
+class SeedIVFeatureDataset(Dataset):
+    """
+    SEED-IV feature-level dataset for DGCNN.
+
+    Each sample corresponds to:
+        - one sliding window (segment)
+        - one graph with 62 nodes
+        - node feature dimension = 5 (DE bands)
+
+    Returned sample:
+        x: (62, 5)
+        y: int in {0,1,2,3}
+    """
+
+    session_labels = {
+        1: [1,2,3,0,2,0,0,1,0,1,2,1,1,1,2,3,2,2,3,3,0,3,0,3],
+        2: [2,1,3,0,0,2,0,2,3,3,2,3,2,0,1,1,2,1,0,3,0,1,3,1],
+        3: [1,2,2,1,3,3,3,1,1,2,1,0,2,3,3,0,2,3,0,0,2,0,1,0],
+    }
+
+    def __init__(
+        self,
+        root: str,
+        feature_key: str = "de_LDS",
+        sessions: List[int] = [1, 2, 3],
+        subjects: List[int] | None = None,
+        dtype: torch.dtype = torch.float32,
+    ):
+        """
+        Args:
+            root: path to eeg_feature_smooth
+            feature_key: 'de_LDS' or 'psd_LDS'
+            sessions: which sessions to load
+            subjects: optional subject id list
+        """
+        self.root = root
+        self.feature_key = feature_key
+        self.sessions = sessions
+        self.dtype = dtype
+
+        self.samples: List[Tuple[np.ndarray, int]] = []
+        self._build_index(subjects)
+
+    def _build_index(self, subjects: List[int] | None):
+        for session_id in self.sessions:
+            session_dir = os.path.join(self.root, str(session_id))
+            label_list = self.session_labels[session_id]
+
+            for file_name in sorted(os.listdir(session_dir)):
+                if not file_name.endswith(".mat"):
+                    continue
+
+                subject_id = int(file_name.split("_")[0])
+                if subjects is not None and subject_id not in subjects:
+                    continue
+
+                mat_path = os.path.join(session_dir, file_name)
+                mat_data = scipy.io.loadmat(mat_path)
+
+                for trial_idx in range(24):
+                    key = f"{self.feature_key}{trial_idx + 1}"
+                    if key not in mat_data:
+                        continue
+
+                    trial_feature = mat_data[key]  # (62, T, 5)
+                    label = label_list[trial_idx]
+
+                    # Split into segments
+                    for t in range(trial_feature.shape[1]):
+                        segment = trial_feature[:, t, :]  # (62, 5)
+                        self.samples.append((segment, label))
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+    def __getitem__(self, index: int):
+        x, y = self.samples[index]
+        x = torch.tensor(x, dtype=self.dtype)
+        y = torch.tensor(y, dtype=torch.long)
+        return x, y
+
+
 class EEGDatasetBase(Dataset):
     """
     Python dataset wrapper that takes tensors and implements dataset structure
@@ -423,3 +506,5 @@ class Seed(EEGDataset):
         }
 
         return data_array, label_array
+
+
