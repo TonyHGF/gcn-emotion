@@ -10,7 +10,7 @@ import torch.nn as nn
 
 from graph_utils import laplacian, GraphConv
 from losses import B1ReLU, B2ReLU, SparseL2Regularization, NewSparseL2Regularization
-from config import FeatureExtractorConfig
+from utils import FeatureExtractorConfig
 
 
 class DGCNN(nn.Module):
@@ -200,15 +200,23 @@ class DGCNNAdapter(nn.Module):
     def forward(self, batch_tensor: torch.Tensor) -> torch.Tensor:
         """
         Args:
-            batch_tensor: (B, 1, Ch, T)
+            batch_tensor: (B, 1, Ch, T) or (B, Ch, T)
 
         Returns:
             logits: (B, num_classes)
         """
-        if batch_tensor.dim() != 4:
-            raise ValueError(f"Expected input (B, 1, Ch, T), got shape: {tuple(batch_tensor.shape)}")
+        if batch_tensor.dim() == 4:
+            # (B, 1, Ch, T) → (B, Ch, T)
+            signal_tensor = batch_tensor.squeeze(1)
+        elif batch_tensor.dim() == 3:
+            # already (B, Ch, T)
+            signal_tensor = batch_tensor
+        else:
+            raise ValueError(
+                f"Expected input shape (B, 1, Ch, T) or (B, Ch, T), "
+                f"got shape: {tuple(batch_tensor.shape)}"
+            )
 
-        signal_tensor = batch_tensor.squeeze(1)  # (B, Ch, T)
         node_features = self.extract_features(signal_tensor)  # (B, Ch, F)
         logits = self.dgcnn(node_features)
         return logits
