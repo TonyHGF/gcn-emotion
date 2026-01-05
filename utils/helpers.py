@@ -1,4 +1,6 @@
 import numpy as np
+import random 
+import torch
 
 def inspect_one_subject(dataset, subject_id, max_trials=3):
     data_dict, label_dict = dataset.__get_subject__(subject_id)
@@ -33,3 +35,14 @@ def count_total_segments(dataset):
             total_segments += trial_data.shape[0]
 
     return total_segments
+
+
+# ================= Random Seed =================
+def set_random_seed(exp_id: int):
+    random.seed(exp_id)
+    np.random.seed(exp_id)
+    torch.manual_seed(exp_id)
+    torch.cuda.manual_seed_all(exp_id)
+
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
