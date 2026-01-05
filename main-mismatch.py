@@ -9,12 +9,9 @@ import torch.nn as nn
 from dataclasses import dataclass
 import matplotlib.pyplot as plt
 
-import helpers
-from datasets import EEGDataset, SeedIV, EEGDatasetBase
-from loader import EEGDataloader
-from transforms import Construct, Crop, Segment, Resample
-from model import DGCNN, DGCNNAdapter
-from config import FeatureExtractorConfig
+from data import SeedIV, EEGDatasetBase, EEGDataloader
+from models import DGCNN, DGCNNAdapter, Construct, Crop, Segment, Resample
+from utils import FeatureExtractorConfig, helpers
 
 
 

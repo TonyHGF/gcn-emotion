@@ -9,8 +9,8 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 import matplotlib.pyplot as plt
 
-from model import DGCNN
-from datasets import SeedIVFeatureDataset
+from models import DGCNN
+from data import SeedIVFeatureDataset
 
 
 # ================= Random Seed =================
