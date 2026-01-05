@@ -14,7 +14,7 @@ from typing import Dict, List, Tuple
 from abc import ABC, abstractmethod
 from pathlib import Path
 from collections import defaultdict
-from transforms import Construct
+from .transforms import Construct
 
 logger = logging.getLogger("Dataset")
 

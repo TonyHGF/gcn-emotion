@@ -1,3 +1,3 @@
-from config import *
-from helpers import *
+from .config import *
+from .helpers import *
 

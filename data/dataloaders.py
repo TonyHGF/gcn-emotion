@@ -7,7 +7,7 @@ import copy
 import torch
 from torch.utils.data import DataLoader
 
-from datasets import EEGDataset, EEGDatasetBase
+from .datasets import EEGDataset, EEGDatasetBase
 
 logger = logging.getLogger("Dataloader")
 logging.getLogger('matplotlib').setLevel(logging.WARNING)

@@ -8,8 +8,8 @@ from typing import List, Optional
 import torch
 import torch.nn as nn
 
-from graph_utils import laplacian, GraphConv
-from losses import B1ReLU, B2ReLU, SparseL2Regularization, NewSparseL2Regularization
+from .graph_utils import laplacian, GraphConv
+from .losses import B1ReLU, B2ReLU, SparseL2Regularization, NewSparseL2Regularization
 from utils import FeatureExtractorConfig
 
 
