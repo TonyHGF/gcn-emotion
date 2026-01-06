@@ -54,9 +54,10 @@ def main():
             "num_electrodes": 62,
             "in_channels": 5,
             "num_classes": 4,
-            "explain_steps": 300,
-            "save_path": "results/edge_mask_sample.pt",
+            "test_sessions": [1, 2, 3], 
+            "save_path": "results/dgcnn_global_explanation.pt",
         }
+
 
         run_dgcnn_explain(explain_config)
 

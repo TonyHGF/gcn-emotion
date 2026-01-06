@@ -1,110 +1,138 @@
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
-class DGCNNExplainer(nn.Module):
-    """
-    Edge-mask explainer for your DGCNN core model.
-
-    Expected input:
-        node_features: (B, N, F) where
-            N = num_electrodes (e.g., 62)
-            F = in_channels (e.g., 5 for de_LDS)
-    """
-
-    def __init__(
-        self,
-        model: nn.Module,
-        num_nodes: int,
-        lr: float = 0.01,
-        lambda_sparse: float = 0.005,
-        lambda_entropy: float = 0.1,
-        steps: int = 300,
-        symmetric_mask: bool = True,
-    ) -> None:
-        super().__init__()
-        self.model = model.eval()
-        self.num_nodes = int(num_nodes)
-        self.steps = int(steps)
-        self.lambda_sparse = float(lambda_sparse)
-        self.lambda_entropy = float(lambda_entropy)
-        self.symmetric_mask = bool(symmetric_mask)
-
-        # Mask logits -> sigmoid -> (0, 1)
-        self.edge_mask_logits = nn.Parameter(torch.randn(self.num_nodes, self.num_nodes))
-        self.optimizer = torch.optim.Adam([self.edge_mask_logits], lr=lr)
-
-    @staticmethod
-    def _entropy(mask: torch.Tensor) -> torch.Tensor:
-        # mask in (0, 1)
-        return -(
-            mask * torch.log(mask + 1e-8) + (1.0 - mask) * torch.log(1.0 - mask + 1e-8)
-        ).mean()
-
-    def _build_mask(self) -> torch.Tensor:
-        mask = torch.sigmoid(self.edge_mask_logits)
-
-        if self.symmetric_mask:
-            mask = 0.5 * (mask + mask.t())
-
-        # Optional: remove self-loops if you want purely inter-electrode edges
-        mask = mask * (1.0 - torch.eye(self.num_nodes, device=mask.device))
-
-        return mask
-
-    def explain(self, node_features: torch.Tensor, target_class: int | None = None) -> torch.Tensor:
+class DGCNNInterpreter:
+    def __init__(self, model, device="cuda"):
         """
-        Args:
-            node_features: (B, N, F) e.g. (1, 62, 5)
-            target_class: if None, uses model's predicted class for the given input
-
-        Returns:
-            edge_importance: (N, N) in [0, 1]
+        Initialize the interpreter.
+        model: trained DGCNN model
+        device: 'cuda' or 'cpu'
         """
-        if node_features.dim() != 3:
-            raise ValueError(f"Expected node_features with shape (B, N, F), got {tuple(node_features.shape)}")
-        if node_features.shape[1] != self.num_nodes:
-            raise ValueError(
-                f"Expected N={self.num_nodes}, got node_features.shape[1]={node_features.shape[1]}"
+        self.model = model.to(device)
+        self.model.eval()  # must use eval mode to disable dropout
+        self.device = device
+
+    def _compute_single_sample_saliency(self, sample, target_class_idx):
+        """
+        Compute gradient-based saliency for one sample.
+        sample shape: (1, num_electrodes, num_features)
+        """
+        # Prepare input
+        input_tensor = sample.clone().detach().to(self.device)
+        input_tensor.requires_grad = True
+
+        # Clear old gradients
+        self.model.zero_grad()
+
+        # Forward pass
+        logits = self.model(input_tensor)
+
+        # Select target class score
+        score = logits[0, target_class_idx]
+
+        # Backward pass
+        score.backward()
+
+        # -----------------------------
+        # Node importance
+        # -----------------------------
+        # Sum absolute gradients over feature dimension
+        node_saliency = (
+            input_tensor.grad.abs()
+            .sum(dim=-1)
+            .squeeze()
+            .cpu()
+            .numpy()
+        )
+
+        # -----------------------------
+        # Edge importance
+        # -----------------------------
+        # Use gradient of learnable adjacency matrix
+        if self.model.adjacency.grad is not None:
+            edge_saliency = self.model.adjacency.grad.abs().cpu().numpy()
+        else:
+            edge_saliency = np.zeros(
+                (self.model.num_electrodes, self.model.num_electrodes)
             )
 
-        with torch.no_grad():
-            logits = self.model(node_features)
-            if target_class is None:
-                target_class = int(logits.argmax(dim=1).item())
+        return node_saliency, edge_saliency
 
-        for _ in range(self.steps):
-            self.optimizer.zero_grad()
-
-            mask = self._build_mask()
-
-            # Inject mask into adjacency
-            masked_adj = self.model.adjacency * mask
-
-            logits_masked = self._forward_with_custom_adjacency(node_features, masked_adj)
-
-            # Keep the same prediction (maximize log-prob of target class)
-            loss_pred = -F.log_softmax(logits_masked, dim=1)[0, target_class]
-
-            # Regularize: sparse + low-entropy (push toward 0/1)
-            loss_sparse = mask.mean()
-            loss_entropy = self._entropy(mask)
-
-            loss = loss_pred + self.lambda_sparse * loss_sparse + self.lambda_entropy * loss_entropy
-            loss.backward()
-            self.optimizer.step()
-
-        return self._build_mask().detach()
-
-    def _forward_with_custom_adjacency(self, node_features: torch.Tensor, new_adjacency: torch.Tensor) -> torch.Tensor:
+    def explain_group(self, test_loader, target_class_idx):
         """
-        Temporarily replace model.adjacency during forward.
-        Works because your DGCNN uses self.adjacency inside forward().
+        Compute average importance for one class over the test set.
         """
-        original = self.model.adjacency.data.clone()
-        try:
-            self.model.adjacency.data = new_adjacency.data
-            return self.model(node_features)
-        finally:
-            self.model.adjacency.data = original
+        print(f"Analyzing target class: {target_class_idx}")
+
+        node_saliency_list = []
+        edge_saliency_list = []
+        count = 0
+
+        for inputs, labels in test_loader:
+            inputs = inputs.to(self.device)
+            labels = labels.to(self.device)
+
+            # Process samples one by one
+            for i in range(len(inputs)):
+                sample = inputs[i].unsqueeze(0)
+                label = labels[i].item()
+
+                # Only analyze target class
+                if label != target_class_idx:
+                    continue
+
+                # Check prediction correctness
+                with torch.no_grad():
+                    pred = self.model(sample).argmax(dim=1).item()
+
+                if pred == label:
+                    n_sal, e_sal = self._compute_single_sample_saliency(
+                        sample, target_class_idx
+                    )
+                    node_saliency_list.append(n_sal)
+                    edge_saliency_list.append(e_sal)
+                    count += 1
+
+        if count == 0:
+            print("No correctly predicted samples found.")
+            return None, None
+
+        print(f"Used {count} correctly predicted samples.")
+
+        # Average over samples
+        avg_node_importance = np.mean(node_saliency_list, axis=0)
+        avg_edge_importance = np.mean(edge_saliency_list, axis=0)
+
+        return avg_node_importance, avg_edge_importance
+
+    def visualize_result(
+        self,
+        avg_node,
+        avg_edge,
+        class_name="Happy",
+        save_path="dgcnn_explain.png"
+    ):
+        """
+        Save node and edge importance figures to disk.
+        """
+        plt.figure(figsize=(12, 5))
+
+        # Node importance
+        plt.subplot(1, 2, 1)
+        plt.bar(range(len(avg_node)), avg_node)
+        plt.title(f"{class_name} - Node Importance")
+        plt.xlabel("Electrode Index")
+        plt.ylabel("Importance")
+
+        # Edge importance
+        plt.subplot(1, 2, 2)
+        sns.heatmap(avg_edge, cmap="Reds")
+        plt.title(f"{class_name} - Edge Importance")
+
+        plt.tight_layout()
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        plt.close()
+
