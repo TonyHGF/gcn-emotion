@@ -106,7 +106,7 @@ class DGCNNInterpreter:
         avg_node_importance = np.mean(node_saliency_list, axis=0)
         avg_edge_importance = np.mean(edge_saliency_list, axis=0)
 
-        return avg_node_importance, avg_edge_importance
+        return avg_node_importance, avg_edge_importance, count
 
     def visualize_result(
         self,
