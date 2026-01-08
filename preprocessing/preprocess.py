@@ -87,7 +87,6 @@ def LDS_smoothing(X):
     # P_new = (I - K * C) * P_pred
     
     # For feature smoothing, we can assume parameters are stationary.
-    # To get 95% acc, the features must be VERY stable.
     # We will use a standard smoothing window interpretation of LDS 
     # by applying a bi-directional filter if we skip full EM.
     
