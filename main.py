@@ -23,7 +23,7 @@ def main():
 
     if mode == "train" and model == "dgcnn":
         config = {
-            "data_root": "/public/home/hugf2022/emotion/seediv/m_eeg_feature_smooth_norm",
+            "data_root": "/public/home/hugf2022/emotion/seediv/m_eeg_feature_LDS_corrected",
             "batch_size": 64,
             "lr": 1e-3,
             "num_epochs": 50,

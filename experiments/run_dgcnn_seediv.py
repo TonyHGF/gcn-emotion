@@ -47,6 +47,19 @@ def run_one_experiment(exp_id: int, config: dict):
         test_set, batch_size=config["batch_size"], shuffle=False
     )
 
+    logger.info("-" * 30)
+    logger.info("Experiment Configuration:")
+    for key, value in config.items():
+        logger.info(f"  {key:<15}: {value}")
+    logger.info("-" * 30)
+
+    logger.info(f"Dataset Summary for Experiment {exp_id}:")
+    logger.info(f"  Total Samples : {num_total}")
+    logger.info(f"  Training Set  : {len(train_set)} samples")
+    logger.info(f"  Validation Set: {len(val_set)} samples")
+    logger.info(f"  Testing Set   : {len(test_set)} samples")
+    logger.info("-" * 30)
+
     # ---------- Model ----------
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
