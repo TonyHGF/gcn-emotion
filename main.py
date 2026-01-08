@@ -17,13 +17,13 @@ def main():
     )
 
     # ================= USER CONTROL =================
-    mode = "explain"      # "train" or "explain"
+    mode = "train"      # "train" or "explain"
     model = "dgcnn"     # currently only dgcnn
     # =================================================
 
     if mode == "train" and model == "dgcnn":
         config = {
-            "data_root": "/public/home/hugf2022/emotion/seediv/eeg_feature_smooth",
+            "data_root": "/public/home/hugf2022/emotion/seediv/m_eeg_feature_smooth_norm",
             "batch_size": 64,
             "lr": 1e-3,
             "num_epochs": 50,
