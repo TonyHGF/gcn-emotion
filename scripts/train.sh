@@ -6,12 +6,12 @@ set -e
 ########################################
 
 # Execution environment
-RUN_ENV="server"        # local | server
+RUN_ENV="local"        # local | server
 
 # Paths
-PROJECT_ROOT="/home_data/home/hugf2022/code/gcn-emotion"
-CONDA_ENV="emotion"
-DATA_ROOT="/public/home/hugf2022/emotion/seediv/eeg_feature_bands/b"
+PROJECT_ROOT="/public/home/yangzhy22022/study/gcn-emotion"
+CONDA_ENV="gcn"
+DATA_ROOT="/public/home/yangzhy22022/storage/datasets/seediv/eeg_feature_bands/dtabg"
 
 # Output naming
 EXP_NAME="train_dtabg_exp2"  # 修改这里区分不同实验
@@ -26,10 +26,10 @@ CHECKPOINTS_FOLDER="checkpoints/${EXP_NAME}"
 MODEL="dgcnn"
 BATCH_SIZE=64
 LR=1e-3
-NUM_EPOCHS=100
+NUM_EPOCHS=50
 TRAIN_RATIO=0.7
 VAL_RATIO=0.15
-EXP_TIMES=5
+EXP_TIMES=1
 NUM_ELECTRODES=62
 IN_CHANNELS=5
 NUM_CLASSES=4
@@ -68,7 +68,7 @@ CMD="python main.py \
 if [ "${RUN_ENV}" = "local" ]; then
   echo "[INFO] Running Training locally"
   cd "${PROJECT_ROOT}"
-  source ~/anaconda3/bin/activate "${CONDA_ENV}"
+  # source ~/anaconda3/bin/activate "${CONDA_ENV}"
   echo "[CMD] ${CMD}"
   eval "${CMD}"
 
