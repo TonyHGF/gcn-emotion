@@ -16,10 +16,9 @@ MODEL="dgcnn"
 PROJECT_ROOT="/home_data/home/hugf2022/code/gcn-emotion"
 CONDA_ENV="emotion"
 
-DATA_ROOT="/public/home/hugf2022/emotion/seediv/eeg_feature_smooth"
-CHECKPOINT_PATH="checkpoints/20260109_train_theirs.pth"
+DATA_ROOT="/public/home/hugf2022/emotion/seediv/eeg_feature_bands/g"
 
-EXP_NAME="train_dtabg"
+EXP_NAME="train_g100"
 OUTPUT_ROOT="results"
 OUTPUT_DIR="${OUTPUT_ROOT}/${EXP_NAME}"
 
@@ -27,10 +26,10 @@ OUTPUT_DIR="${OUTPUT_ROOT}/${EXP_NAME}"
 # Training arguments
 ########################################
 
-CHECKPOINTS_FOLDER="checkpoints/train_theirs"
+CHECKPOINTS_FOLDER="checkpoints/${EXP_NAME}"
 BATCH_SIZE=64
 LR=1e-3
-NUM_EPOCHS=50
+NUM_EPOCHS=100
 TRAIN_RATIO=0.7
 VAL_RATIO=0.15
 EXP_TIMES=5
@@ -41,9 +40,10 @@ EXP_TIMES=5
 
 FEATURE_KEY="de_LDS"
 NUM_ELECTRODES=62
-IN_CHANNELS=5
+IN_CHANNELS=2
 NUM_CLASSES=4
 TEST_SESSIONS="1 2 3"
+CHECKPOINT_PATH="checkpoints/train_dtabg/best_model_exp1.pth"
 
 ########################################
 # Prepare output directory
