@@ -9,16 +9,16 @@ set -e
 RUN_ENV="server"        # local | server
 
 # Experiment mode
-MODE="train"          # train | explain
+MODE="explain"          # train | explain
 MODEL="dgcnn"
 
 # Paths
 PROJECT_ROOT="/home_data/home/hugf2022/code/gcn-emotion"
 CONDA_ENV="emotion"
 
-DATA_ROOT="/public/home/hugf2022/emotion/seediv/eeg_feature_bands/g"
+DATA_ROOT="/public/home/hugf2022/emotion/seediv/eeg_feature_bands/b"
 
-EXP_NAME="train_g100"
+EXP_NAME="explain_dtabg"
 OUTPUT_ROOT="results"
 OUTPUT_DIR="${OUTPUT_ROOT}/${EXP_NAME}"
 
@@ -40,7 +40,7 @@ EXP_TIMES=5
 
 FEATURE_KEY="de_LDS"
 NUM_ELECTRODES=62
-IN_CHANNELS=2
+IN_CHANNELS=5
 NUM_CLASSES=4
 TEST_SESSIONS="1 2 3"
 CHECKPOINT_PATH="checkpoints/train_dtabg/best_model_exp1.pth"
