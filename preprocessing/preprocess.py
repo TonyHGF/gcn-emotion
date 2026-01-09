@@ -8,7 +8,7 @@ from scipy.signal import butter, filtfilt
 # ==========================================
 INPUT_ROOT = "/public/home/hugf2022/emotion/seediv/eeg_raw_data"
 # Update output folder to reflect the fix
-OUTPUT_ROOT = "/public/home/hugf2022/emotion/seediv/m_eeg_feature_LDS_corrected" 
+OUTPUT_ROOT = "/public/home/hugf2022/emotion/seediv/m_eeg_feature_smooth" 
 
 FS = 200                
 WINDOW_SEC = 4          

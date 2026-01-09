@@ -65,9 +65,9 @@ def run_one_experiment(exp_id: int, config: dict):
     logger.info(f"Using device: {device}")
 
     model = DGCNN(
-        num_electrodes=62,
-        in_channels=5,
-        num_classes=4,
+        num_electrodes=config["num_electrodes"],
+        in_channels=config["in_channels"],
+        num_classes=config["num_classes"],
     ).to(device)
 
     criterion = nn.CrossEntropyLoss()
@@ -80,7 +80,8 @@ def run_one_experiment(exp_id: int, config: dict):
     }
 
     best_val_acc = 0.0
-    ckpt_path = f"checkpoints/best_model_exp{exp_id}.pth"
+    os.makedirs(config["checkpoints_folder"], exist_ok=True)
+    ckpt_path = os.path.join(config["checkpoints_folder"], f"best_model_exp{exp_id}.pth")
 
     for epoch in range(config["num_epochs"]):
         model.train()
@@ -144,7 +145,7 @@ def run_one_experiment(exp_id: int, config: dict):
     logger.info(f"Experiment {exp_id} | Test Accuracy = {test_acc:.4f}")
 
     # ---------- Plot ----------
-    fig_path = f"results/training_curves_exp{exp_id}.png"
+    fig_path = os.path.join(config["output_dir"], f"training_curves_exp{exp_id}.png")
 
     plt.figure(figsize=(12, 5))
 

@@ -15,7 +15,5 @@ cd /home_data/home/hugf2022/code/gcn-emotion/preprocessing
 # 激活环境
 source ~/anaconda3/bin/activate emotion
 
-# 执行预处理脚本
-# 注意：确保你的 python 代码里使用了多进程（如 multiprocessing 或 joblib）
-# 这样才能真正利用到上面申请的 16 个 CPU 核心
-python preprocess.py
+
+python extract_bands.py
