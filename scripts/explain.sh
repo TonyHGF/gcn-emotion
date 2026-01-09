@@ -11,10 +11,10 @@ RUN_ENV="server"        # local | server
 # Paths
 PROJECT_ROOT="/home_data/home/hugf2022/code/gcn-emotion"
 CONDA_ENV="emotion"
-DATA_ROOT="/public/home/hugf2022/emotion/seediv/eeg_feature_bands/dtabg"
+DATA_ROOT="/public/home/hugf2022/emotion/seediv/eeg_feature_bands/bg"
 
 # Output naming
-EXP_NAME="explain_dtabg"
+EXP_NAME="explain_bg"
 OUTPUT_ROOT="results"
 OUTPUT_DIR="${OUTPUT_ROOT}/${EXP_NAME}"
 
@@ -25,12 +25,12 @@ OUTPUT_DIR="${OUTPUT_ROOT}/${EXP_NAME}"
 MODEL="dgcnn"
 FEATURE_KEY="de_LDS"
 NUM_ELECTRODES=62
-IN_CHANNELS=5
+IN_CHANNELS=2
 NUM_CLASSES=4
 TEST_SESSIONS="1 2 3"
 
 # !!! 重要：这里指定你要解释的模型路径 !!!
-CHECKPOINT_PATH="checkpoints/train_dtabg/best_model_exp1.pth"
+CHECKPOINT_PATH="checkpoints/train_bg100/best_model_exp5.pth"
 
 ########################################
 # Prepare output directory
