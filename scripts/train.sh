@@ -33,6 +33,7 @@ EXP_TIMES=1
 NUM_ELECTRODES=62
 IN_CHANNELS=5
 NUM_CLASSES=4
+SPLIT="trial"
 
 ########################################
 # Prepare output directory
@@ -59,7 +60,8 @@ CMD="python main.py \
   --num_electrodes ${NUM_ELECTRODES} \
   --in_channels ${IN_CHANNELS} \
   --num_classes ${NUM_CLASSES} \
-  --checkpoints_folder ${CHECKPOINTS_FOLDER}"
+  --checkpoints_folder ${CHECKPOINTS_FOLDER} \
+  --split ${SPLIT}"
 
 ########################################
 # Run

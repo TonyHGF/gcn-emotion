@@ -10,7 +10,7 @@ import scipy.io
 import logging
 
 from torch.utils.data import Dataset
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 from abc import ABC, abstractmethod
 from pathlib import Path
 from collections import defaultdict
@@ -18,6 +18,12 @@ from .transforms import Construct
 
 logger = logging.getLogger("Dataset")
 
+# 6 per session
+session_labels = {
+    1: [1,2,3,0,2,0,0,1,0,1,2,1,1,1,2,3,2,2,3,3,0,3,0,3],
+    2: [2,1,3,0,0,2,0,2,3,3,2,3,2,0,1,1,2,1,0,3,0,1,3,1],
+    3: [1,2,2,1,3,3,3,1,1,2,1,0,2,3,3,0,2,3,0,0,2,0,1,0],
+}
 
 class SeedIVFeatureDataset(Dataset):
     """
@@ -33,18 +39,13 @@ class SeedIVFeatureDataset(Dataset):
         y: int in {0,1,2,3}
     """
 
-    session_labels = {
-        1: [1,2,3,0,2,0,0,1,0,1,2,1,1,1,2,3,2,2,3,3,0,3,0,3],
-        2: [2,1,3,0,0,2,0,2,3,3,2,3,2,0,1,1,2,1,0,3,0,1,3,1],
-        3: [1,2,2,1,3,3,3,1,1,2,1,0,2,3,3,0,2,3,0,0,2,0,1,0],
-    }
-
     def __init__(
         self,
         root: str,
         feature_key: str = "de_LDS",
         sessions: List[int] = [1, 2, 3],
-        subjects: List[int] | None = None,
+        subjects: Optional[List[int]] = None,
+        trials: Optional[List[Tuple]] = None,
         dtype: torch.dtype = torch.float32,
     ):
         """
@@ -58,14 +59,17 @@ class SeedIVFeatureDataset(Dataset):
         self.feature_key = feature_key
         self.sessions = sessions
         self.dtype = dtype
+        self.trials = trials
 
         self.samples: List[Tuple[np.ndarray, int]] = []
         self._build_index(subjects)
 
+    # File structure: Band/session/subject/trials
     def _build_index(self, subjects: List[int] | None):
+        # [1, 2, 3]
         for session_id in self.sessions:
             session_dir = os.path.join(self.root, str(session_id))
-            label_list = self.session_labels[session_id]
+            label_list = session_labels[session_id]
 
             for file_name in sorted(os.listdir(session_dir)):
                 if not file_name.endswith(".mat"):
@@ -79,10 +83,12 @@ class SeedIVFeatureDataset(Dataset):
                 mat_data = scipy.io.loadmat(mat_path)
 
                 for trial_idx in range(24):
+                    if self.trials is not None and (session_id, trial_idx) not in self.trials:
+                        continue
                     key = f"{self.feature_key}{trial_idx + 1}"
                     if key not in mat_data:
                         continue
-
+                    
                     trial_feature = mat_data[key]  # (62, T, 5)
                     label = label_list[trial_idx]
 

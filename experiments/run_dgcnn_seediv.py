@@ -13,6 +13,103 @@ from models import DGCNN
 from data import SeedIVFeatureDataset
 from utils import set_random_seed
 
+from data.datasets import session_labels
+
+def all_mix_split(config):
+    # ---------- Dataset ----------
+    dataset = SeedIVFeatureDataset(
+        root=config["data_root"],
+        feature_key="de_LDS",
+        sessions=[1, 2, 3],)
+
+    num_total = len(dataset)
+    num_train = int(num_total * config["train_ratio"])
+    num_val = int(num_total * config["val_ratio"])
+    num_test = num_total - num_train - num_val
+
+    train_set, val_set, test_set = random_split(
+        dataset, [num_train, num_val, num_test])
+
+    train_loader = DataLoader(
+        train_set, batch_size=config["batch_size"], shuffle=True)
+    val_loader = DataLoader(
+        val_set, batch_size=config["batch_size"], shuffle=False)
+    test_loader = DataLoader(
+        test_set, batch_size=config["batch_size"], shuffle=False)
+    
+    return train_loader, val_loader, test_loader, num_train, num_val, num_test
+
+# Divide based on subject
+def loso_split(config):
+    pick = random.randint(1, 15)
+    
+    # Test: 1
+    test_set = SeedIVFeatureDataset(
+        root=config["data_root"],
+        feature_key="de_LDS",
+        sessions=[1, 2, 3],
+        subjects=[pick])
+    #Train: 14
+    train_set = SeedIVFeatureDataset(
+        root=config["data_root"],
+        feature_key="de_LDS",
+        sessions=[1, 2, 3],
+        subjects=[i for i in range(1, 16) if (i != pick)])
+    
+    train_loader = DataLoader(
+        train_set, batch_size=config["batch_size"], shuffle=True)
+    test_loader = DataLoader(
+        test_set, batch_size=config["batch_size"], shuffle=False)
+
+    return train_loader, None, test_loader, len(train_set), 0, len(test_set)
+
+def trial_split(config):
+
+    def generate_balanced_trial_splits():
+        trials_by_label = {0: [], 1: [], 2: [], 3: []}
+        
+        for sess in [1, 2, 3]:
+            labels = session_labels[sess]
+            for idx, lbl in enumerate(labels):
+                trials_by_label[lbl].append((sess, idx))
+        
+        train_list, val_list, test_list = [], [], []
+
+        for lbl in [0, 1, 2, 3]:
+            trials = trials_by_label[lbl]
+            assert len(trials) == 18, f"Expected 18 trials for label {lbl}, got {len(trials)}"
+            random.shuffle(trials)
+
+            train_chunk = trials[:14]
+            val_chunk = trials[14:16]
+            test_chunk = trials[16:]
+
+            train_list.extend(train_chunk)
+            val_list.extend(val_chunk)
+            test_list.extend(test_chunk)
+        
+        return train_list, val_list, test_list
+    
+    train_trials, val_trials, test_trials = generate_balanced_trial_splits()
+
+    train_set = SeedIVFeatureDataset(
+        root=config["data_root"], feature_key="de_LDS", sessions=[1, 2, 3],
+        trials=train_trials)
+    val_set = SeedIVFeatureDataset(
+        root=config["data_root"], feature_key="de_LDS", sessions=[1, 2, 3],
+        trials=val_trials)
+    test_set = SeedIVFeatureDataset(
+        root=config["data_root"], feature_key="de_LDS", sessions=[1, 2, 3],
+        trials=test_trials)
+    
+    train_loader = DataLoader(
+        train_set, batch_size=config["batch_size"], shuffle=True)
+    val_loader = DataLoader(
+        val_set, batch_size=config["batch_size"], shuffle=False)
+    test_loader = DataLoader(
+        test_set, batch_size=config["batch_size"], shuffle=False)
+    
+    return train_loader, val_loader, test_loader, len(train_set), len(val_set), len(test_set)
 
 # ================= One Experiment =================
 def run_one_experiment(exp_id: int, config: dict):
@@ -21,31 +118,15 @@ def run_one_experiment(exp_id: int, config: dict):
 
     set_random_seed(exp_id)
 
-    # ---------- Dataset ----------
-    dataset = SeedIVFeatureDataset(
-        root=config["data_root"],
-        feature_key="de_LDS",
-        sessions=[1, 2, 3],
-    )
-
-    num_total = len(dataset)
-    num_train = int(num_total * config["train_ratio"])
-    num_val = int(num_total * config["val_ratio"])
-    num_test = num_total - num_train - num_val
-
-    train_set, val_set, test_set = random_split(
-        dataset, [num_train, num_val, num_test]
-    )
-
-    train_loader = DataLoader(
-        train_set, batch_size=config["batch_size"], shuffle=True
-    )
-    val_loader = DataLoader(
-        val_set, batch_size=config["batch_size"], shuffle=False
-    )
-    test_loader = DataLoader(
-        test_set, batch_size=config["batch_size"], shuffle=False
-    )
+    if config["split"] == "all":
+        split = all_mix_split
+    elif config["split"] == "loso":
+        split = loso_split
+    else:
+        split = trial_split
+    train_loader, val_loader, test_loader, num_train, num_val, num_test = split(config)
+    
+    num_total = num_train + num_val + num_test
 
     logger.info("-" * 30)
     logger.info("Experiment Configuration:")
@@ -55,9 +136,9 @@ def run_one_experiment(exp_id: int, config: dict):
 
     logger.info(f"Dataset Summary for Experiment {exp_id}:")
     logger.info(f"  Total Samples : {num_total}")
-    logger.info(f"  Training Set  : {len(train_set)} samples")
-    logger.info(f"  Validation Set: {len(val_set)} samples")
-    logger.info(f"  Testing Set   : {len(test_set)} samples")
+    logger.info(f"  Training Set  : {num_train} samples")
+    logger.info(f"  Validation Set: {num_val} samples")
+    logger.info(f"  Testing Set   : {num_test} samples")
     logger.info("-" * 30)
 
     # ---------- Model ----------
@@ -83,6 +164,7 @@ def run_one_experiment(exp_id: int, config: dict):
     os.makedirs(config["checkpoints_folder"], exist_ok=True)
     ckpt_path = os.path.join(config["checkpoints_folder"], f"best_model_exp{exp_id}.pth")
 
+    best_train_loss = float('inf')
     for epoch in range(config["num_epochs"]):
         model.train()
         total_loss = 0.0
@@ -103,29 +185,39 @@ def run_one_experiment(exp_id: int, config: dict):
         history["train_loss"].append(avg_loss)
 
         # ----- Validation -----
-        model.eval()
-        correct, total = 0, 0
-        with torch.no_grad():
-            for x, y in val_loader:
-                x = x.to(device)
-                y = y.to(device)
+        if val_loader is not None:
+            model.eval()
+            correct, total = 0, 0
+            with torch.no_grad():
+                for x, y in val_loader:
+                    x = x.to(device)
+                    y = y.to(device)
 
-                preds = model(x).argmax(dim=1)
-                correct += (preds == y).sum().item()
-                total += y.size(0)
+                    preds = model(x).argmax(dim=1)
+                    correct += (preds == y).sum().item()
+                    total += y.size(0)
 
-        val_acc = correct / total
-        history["val_acc"].append(val_acc)
+            val_acc = correct / total
+            history["val_acc"].append(val_acc)
 
-        logger.info(
-            f"Epoch [{epoch+1}/{config['num_epochs']}] "
-            f"Loss={avg_loss:.4f} ValAcc={val_acc:.4f}"
-        )
+            logger.info(
+                f"Epoch [{epoch+1}/{config['num_epochs']}] "
+                f"Loss={avg_loss:.4f} ValAcc={val_acc:.4f}"
+            )
 
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            torch.save(model.state_dict(), ckpt_path)
-            logger.info(f"Saved best model (ValAcc={best_val_acc:.4f})")
+            if val_acc > best_val_acc:
+                best_val_acc = val_acc
+                torch.save(model.state_dict(), ckpt_path)
+                logger.info(f"Saved best model (ValAcc={best_val_acc:.4f})")
+        else:
+            logger.info(
+                f"Epoch [{epoch+1}/{config['num_epochs']}] "
+                f"Loss={avg_loss:.4f}"
+            )
+            if avg_loss < best_train_loss:
+                best_train_loss = avg_loss
+                torch.save(model.state_dict(), ckpt_path)
+                logger.info(f"Saved model based on Min Train Loss ({avg_loss:.4f})")
 
     # ---------- Testing ----------
     model.load_state_dict(torch.load(ckpt_path))

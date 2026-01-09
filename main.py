@@ -45,6 +45,7 @@ def build_parser():
     parser.add_argument("--train_ratio", type=float, default=0.7)
     parser.add_argument("--val_ratio", type=float, default=0.15)
     parser.add_argument("--exp_times", type=int, default=5)
+    parser.add_argument("--split", type=str, default="all") # "all", "loso", "trial"
     parser.add_argument("--checkpoints_folder", type=str)
 
     # -------- Explain arguments --------
@@ -93,7 +94,8 @@ def main():
             "in_channels": args.in_channels,
             "num_classes": args.num_classes,
             "checkpoints_folder": args.checkpoints_folder,
-            "output_dir": args.output_dir
+            "output_dir": args.output_dir,
+            "split": args.split
         }
 
         all_test_acc = []

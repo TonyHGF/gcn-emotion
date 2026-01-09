@@ -7,4 +7,3 @@ results/
 checkpoints/
 1
 main-mismatch.py
-scripts/train.sh
