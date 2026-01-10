@@ -17,7 +17,7 @@ CONDA_ENV="emotion"
 DATA_ROOT="/public/home/hugf2022/emotion/seediv/eeg_feature_bands/dtabg"
 
 # Output naming
-EXP_NAME="train_1"  # 修改这里区分不同实验
+EXP_NAME="pgcn_1e-1"  # 修改这里区分不同实验
 OUTPUT_ROOT="results"
 OUTPUT_DIR="${OUTPUT_ROOT}/${EXP_NAME}"
 CHECKPOINTS_FOLDER="checkpoints/${EXP_NAME}"
@@ -26,9 +26,9 @@ CHECKPOINTS_FOLDER="checkpoints/${EXP_NAME}"
 # Training Hyperparameters
 ########################################
 
-MODEL="dgcnn"
+MODEL="pgcn"
 BATCH_SIZE=64
-LR=1e-3
+LR=1e-1
 NUM_EPOCHS=50
 TRAIN_RATIO=0.7
 VAL_RATIO=0.15

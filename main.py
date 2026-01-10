@@ -27,7 +27,7 @@ def build_parser():
         "--model",
         type=str,
         default="dgcnn",
-        choices=["dgcnn"],
+        choices=["dgcnn", "pgcn"],
         help="Model type"
     )
 
@@ -82,10 +82,11 @@ def main():
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-    if args.mode == "train" and args.model == "dgcnn":
+    if args.mode == "train":
         config = {
             "data_root": args.data_root,
             "batch_size": args.batch_size,
+            "model": args.model,
             "lr": args.lr,
             "num_epochs": args.num_epochs,
             "train_ratio": args.train_ratio,
@@ -112,12 +113,13 @@ def main():
             f"Std = {np.std(all_test_acc):.4f}"
         )
 
-    elif args.mode == "explain" and args.model == "dgcnn":
+    elif args.mode == "explain":
         if args.checkpoint_path is None:
             raise ValueError("checkpoint_path must be provided in explain mode")
 
         explain_config = {
             "data_root": args.data_root,
+            "model": args.model,
             "feature_key": args.feature_key,
             "checkpoint_path": args.checkpoint_path,
             "num_electrodes": args.num_electrodes,

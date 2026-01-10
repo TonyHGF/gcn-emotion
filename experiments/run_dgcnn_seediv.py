@@ -9,107 +9,15 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 import matplotlib.pyplot as plt
 
-from models import DGCNN
-from data import SeedIVFeatureDataset
-from utils import set_random_seed
-
+from models import DGCNN, PGCN
+from data import SeedIVFeatureDataset, all_mix_split, trial_split, loso_split
 from data.datasets import session_labels
-
-def all_mix_split(config):
-    # ---------- Dataset ----------
-    dataset = SeedIVFeatureDataset(
-        root=config["data_root"],
-        feature_key="de_LDS",
-        sessions=[1, 2, 3],)
-
-    num_total = len(dataset)
-    num_train = int(num_total * config["train_ratio"])
-    num_val = int(num_total * config["val_ratio"])
-    num_test = num_total - num_train - num_val
-
-    train_set, val_set, test_set = random_split(
-        dataset, [num_train, num_val, num_test])
-
-    train_loader = DataLoader(
-        train_set, batch_size=config["batch_size"], shuffle=True)
-    val_loader = DataLoader(
-        val_set, batch_size=config["batch_size"], shuffle=False)
-    test_loader = DataLoader(
-        test_set, batch_size=config["batch_size"], shuffle=False)
-    
-    return train_loader, val_loader, test_loader, num_train, num_val, num_test
-
-# Divide based on subject
-def loso_split(config):
-    pick = random.randint(1, 15)
-    
-    # Test: 1
-    test_set = SeedIVFeatureDataset(
-        root=config["data_root"],
-        feature_keys=["de_LDS"],
-        sessions=[1, 2, 3],
-        subjects=[pick])
-    #Train: 14
-    train_set = SeedIVFeatureDataset(
-        root=config["data_root"],
-        feature_keys=["de_LDS"],
-        sessions=[1, 2, 3],
-        subjects=[i for i in range(1, 16) if (i != pick)])
-    
-    train_loader = DataLoader(
-        train_set, batch_size=config["batch_size"], shuffle=True)
-    test_loader = DataLoader(
-        test_set, batch_size=config["batch_size"], shuffle=False)
-
-    return train_loader, None, test_loader, len(train_set), 0, len(test_set)
-
-def trial_split(config):
-    train_set = SeedIVFeatureDataset(
-        root=config["data_root"],
-        feature_keys=["de_LDS"],
-        sessions=[1, 2, 3],
-        split="train",
-        train_ratio=config["train_ratio"],
-        val_ratio=config["val_ratio"],
-        seed=config.get("seed", 42),
-    )
-
-    val_set = SeedIVFeatureDataset(
-        root=config["data_root"],
-        feature_keys=["de_LDS"],
-        sessions=[1, 2, 3],
-        split="val",
-        train_ratio=config["train_ratio"],
-        val_ratio=config["val_ratio"],
-        seed=config.get("seed", 42),
-    )
-
-    test_set = SeedIVFeatureDataset(
-        root=config["data_root"],
-        feature_keys=["de_LDS"],
-        sessions=[1, 2, 3],
-        split="test",
-        train_ratio=config["train_ratio"],
-        val_ratio=config["val_ratio"],
-        seed=config.get("seed", 42),
-    )
-
-    return (
-        DataLoader(train_set, batch_size=config["batch_size"], shuffle=True),
-        DataLoader(val_set, batch_size=config["batch_size"], shuffle=False),
-        DataLoader(test_set, batch_size=config["batch_size"], shuffle=False),
-        len(train_set),
-        len(val_set),
-        len(test_set),
-    )
 
 
 # ================= One Experiment =================
 def run_one_experiment(exp_id: int, config: dict):
     logger = logging.getLogger(f"Exp-{exp_id}")
     logger.info(f"Running experiment {exp_id}")
-
-    set_random_seed(exp_id)
 
     if config["split"] == "all":
         split = all_mix_split
@@ -138,11 +46,23 @@ def run_one_experiment(exp_id: int, config: dict):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
 
-    model = DGCNN(
-        num_electrodes=config["num_electrodes"],
-        in_channels=config["in_channels"],
-        num_classes=config["num_classes"]
-    ).to(device)
+    model = None
+    if config["model"] == "dgcnn":
+        model = DGCNN(
+            num_electrodes=config["num_electrodes"],
+            in_channels=config["in_channels"],
+            num_classes=config["num_classes"]
+        ).to(device)
+    elif config["model"] == "pgcn":
+        model = PGCN(
+            num_electrodes=config["num_electrodes"],
+            in_channels=config["in_channels"],
+            num_classes=config["num_classes"],
+            dropout_rate=config.get("dropout", 0.5),
+            lr=0.1
+        ).to(device)
+    else:
+        return None
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=config["lr"], weight_decay=1e-4)
