@@ -30,7 +30,7 @@ class DGCNN(nn.Module):
         num_electrodes: int = 62,
         in_channels: int = 5,
         num_classes: int = 3,
-        chebyshev_order_k: int = 2,
+        chebyshev_order_k: int = 3,
         relu_type: int = 1,
         layers: Optional[List[int]] = None,
         dropout_rate: float = 0.5,

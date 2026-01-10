@@ -1,5 +1,6 @@
 import os
 import torch
+import random
 import numpy as np
 import scipy.io
 import logging
@@ -34,103 +35,141 @@ class SeedIVFeatureDataset(Dataset):
     def __init__(
         self,
         root: str,
-        feature_keys: Union[str, List[str]] = ["de_LDS"], # Changed to accept list or str
+        feature_keys: Union[str, List[str]] = ["de_LDS"],
         sessions: List[int] = [1, 2, 3],
+        split: str = "train",                  # train / val / test
         subjects: Optional[List[int]] = None,
-        trials: Optional[List[Tuple]] = None,
+        train_ratio: float = 0.7,
+        val_ratio: float = 0.1,
+        seed: int = 42,
         dtype: torch.dtype = torch.float32,
     ):
-        """
-        Args:
-            root: path to eeg_feature_smooth
-            feature_keys: Single string or list of strings. 
-                          Options: 'de_LDS', 'de_movingAve', 'psd_LDS', 'psd_movingAve'
-            sessions: which sessions to load
-            subjects: optional subject id list
-        """
         self.root = root
-        
-        # Ensure feature_keys is always a list for consistent processing
+        self.sessions = sessions
+        self.split = split
+        self.subjects = subjects
+        self.train_ratio = train_ratio
+        self.val_ratio = val_ratio
+        self.seed = seed
+        self.dtype = dtype
+
         if isinstance(feature_keys, str):
             self.feature_keys = [feature_keys]
         else:
             self.feature_keys = feature_keys
-            
-        self.sessions = sessions
-        self.dtype = dtype
-        self.trials = trials
 
         self.samples: List[Tuple[np.ndarray, int]] = []
-        self._build_index(subjects)
+        self._build_index()
 
-    def _build_index(self, subjects: List[int] | None):
-        for session_id in self.sessions:
-            session_dir = os.path.join(self.root, str(session_id))
-            label_list = session_labels[session_id]
 
-            # Check if directory exists
-            if not os.path.exists(session_dir):
-                logger.warning(f"Session directory not found: {session_dir}")
+    def _build_index(self):
+        # Make train/val/test deterministic & consistent across three datasets
+        base_seed = self.seed
+
+        for subject_id in self._iter_subject_ids():
+            if self.subjects is not None and subject_id not in self.subjects:
                 continue
 
-            for file_name in sorted(os.listdir(session_dir)):
-                if not file_name.endswith(".mat"):
+            # ---- Load this subject's mat for each session once ----
+            mat_by_session = {}
+            for session_id in self.sessions:
+                session_dir = os.path.join(self.root, str(session_id))
+                if not os.path.exists(session_dir):
                     continue
 
-                subject_id = int(file_name.split("_")[0])
-                if subjects is not None and subject_id not in subjects:
+                # Assumption: file name starts with subject_id, like "1_xxx.mat"
+                target_file = None
+                for file_name in sorted(os.listdir(session_dir)):
+                    if not file_name.endswith(".mat"):
+                        continue
+                    if int(file_name.split("_")[0]) == subject_id:
+                        target_file = file_name
+                        break
+
+                if target_file is None:
                     continue
 
-                mat_path = os.path.join(session_dir, file_name)
-                try:
-                    mat_data = scipy.io.loadmat(mat_path)
-                except Exception as e:
-                    logger.error(f"Error loading {mat_path}: {e}")
-                    continue
+                mat_path = os.path.join(session_dir, target_file)
+                mat_by_session[session_id] = scipy.io.loadmat(mat_path)
 
+            if len(mat_by_session) == 0:
+                continue
+
+            # ---- Build 18 trials per label across sessions: (session_id, trial_idx) ----
+            trials_by_label = {0: [], 1: [], 2: [], 3: []}
+            for session_id in self.sessions:
+                if session_id not in mat_by_session:
+                    continue
+                label_list = session_labels[session_id]  # length 24
                 for trial_idx in range(24):
-                    if self.trials is not None and (session_id, trial_idx) not in self.trials:
-                        continue
-                    
-                    # --- NEW LOGIC START ---
-                    collected_features = []
-                    valid_trial = True
-                    
-                    # Iterate through all requested feature types (e.g., de_LDS, psd_LDS)
-                    for f_key in self.feature_keys:
-                        # Construct key, e.g., "de_LDS1", "psd_LDS1"
-                        key = f"{f_key}{trial_idx + 1}"
-                        
-                        if key not in mat_data:
-                            valid_trial = False
-                            # logger.warning(f"Key {key} missing in {file_name}")
-                            break
-                        
-                        # Data shape: (62, T, 5)
-                        data = mat_data[key]
-                        collected_features.append(data)
+                    lbl = label_list[trial_idx]
+                    trials_by_label[lbl].append((session_id, trial_idx))
 
-                    if not valid_trial:
-                        continue
-                    
-                    # Check if time dimensions align (e.g. if de_LDS has T=60 but psd has T=59)
-                    # This prevents concatenation errors
-                    base_time_len = collected_features[0].shape[1]
-                    if any(f.shape[1] != base_time_len for f in collected_features):
-                        logger.warning(f"Time dimension mismatch in {file_name} trial {trial_idx}")
-                        continue
+            # Sanity (SEED-IV typical): 3 sessions × 6 trials per label = 18
+            for lbl in [0, 1, 2, 3]:
+                if len(trials_by_label[lbl]) != 18:
+                    # If your files are incomplete, relax/remove this assert
+                    raise ValueError(f"Subject {subject_id}: label {lbl} has {len(trials_by_label[lbl])} trials, expected 18.")
 
-                    # Concatenate along the last axis (bands)
-                    # Shape becomes: (62, T, 5 * num_keys)
-                    trial_feature = np.concatenate(collected_features, axis=-1)
-                    # --- NEW LOGIC END ---
+            # ---- Subject-local shuffle, then 14/2/2 split for each label ----
+            rng = random.Random(base_seed + subject_id * 10007)
 
-                    label = label_list[trial_idx]
+            selected_trials = []
+            for lbl in [0, 1, 2, 3]:
+                trials = trials_by_label[lbl]
+                rng.shuffle(trials)
 
-                    # Split into segments
-                    for t in range(trial_feature.shape[1]):
-                        segment = trial_feature[:, t, :]  # (62, total_bands)
-                        self.samples.append((segment, label))
+                train_part = trials[:14]
+                val_part = trials[14:16]
+                test_part = trials[16:18]
+
+                if self.split == "train":
+                    selected_trials.extend(train_part)
+                elif self.split == "val":
+                    selected_trials.extend(val_part)
+                else:  # "test"
+                    selected_trials.extend(test_part)
+
+            # ---- Read selected trials and append segments ----
+            for session_id, trial_idx in selected_trials:
+                mat_data = mat_by_session[session_id]
+                label = session_labels[session_id][trial_idx]
+
+                collected = []
+                valid = True
+                for fkey in self.feature_keys:
+                    key = f"{fkey}{trial_idx + 1}"
+                    if key not in mat_data:
+                        valid = False
+                        break
+                    collected.append(mat_data[key])  # (62, T, bands)
+
+                if not valid:
+                    continue
+
+                T = collected[0].shape[1]
+                if any(arr.shape[1] != T for arr in collected):
+                    continue
+
+                trial_feature = np.concatenate(collected, axis=-1)  # (62, T, total_bands)
+
+                for t in range(T):
+                    self.samples.append((trial_feature[:, t, :], label))
+
+
+    def _iter_subject_ids(self):
+        # Discover subjects from the first available session folder
+        for session_id in self.sessions:
+            session_dir = os.path.join(self.root, str(session_id))
+            if not os.path.exists(session_dir):
+                continue
+            subject_ids = []
+            for file_name in sorted(os.listdir(session_dir)):
+                if file_name.endswith(".mat"):
+                    subject_ids.append(int(file_name.split("_")[0]))
+            return sorted(set(subject_ids))
+        return []
+
 
     def __len__(self) -> int:
         return len(self.samples)

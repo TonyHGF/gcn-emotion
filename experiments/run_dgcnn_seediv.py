@@ -46,13 +46,13 @@ def loso_split(config):
     # Test: 1
     test_set = SeedIVFeatureDataset(
         root=config["data_root"],
-        feature_key="de_LDS",
+        feature_keys=["de_LDS"],
         sessions=[1, 2, 3],
         subjects=[pick])
     #Train: 14
     train_set = SeedIVFeatureDataset(
         root=config["data_root"],
-        feature_key="de_LDS",
+        feature_keys=["de_LDS"],
         sessions=[1, 2, 3],
         subjects=[i for i in range(1, 16) if (i != pick)])
     
@@ -64,52 +64,45 @@ def loso_split(config):
     return train_loader, None, test_loader, len(train_set), 0, len(test_set)
 
 def trial_split(config):
-
-    def generate_balanced_trial_splits():
-        trials_by_label = {0: [], 1: [], 2: [], 3: []}
-        
-        for sess in [1, 2, 3]:
-            labels = session_labels[sess]
-            for idx, lbl in enumerate(labels):
-                trials_by_label[lbl].append((sess, idx))
-        
-        train_list, val_list, test_list = [], [], []
-
-        for lbl in [0, 1, 2, 3]:
-            trials = trials_by_label[lbl]
-            assert len(trials) == 18, f"Expected 18 trials for label {lbl}, got {len(trials)}"
-            random.shuffle(trials)
-
-            train_chunk = trials[:14]
-            val_chunk = trials[14:16]
-            test_chunk = trials[16:]
-
-            train_list.extend(train_chunk)
-            val_list.extend(val_chunk)
-            test_list.extend(test_chunk)
-        
-        return train_list, val_list, test_list
-    
-    train_trials, val_trials, test_trials = generate_balanced_trial_splits()
-
     train_set = SeedIVFeatureDataset(
-        root=config["data_root"], feature_key="de_LDS", sessions=[1, 2, 3],
-        trials=train_trials)
+        root=config["data_root"],
+        feature_keys=["de_LDS"],
+        sessions=[1, 2, 3],
+        split="train",
+        train_ratio=config["train_ratio"],
+        val_ratio=config["val_ratio"],
+        seed=config.get("seed", 42),
+    )
+
     val_set = SeedIVFeatureDataset(
-        root=config["data_root"], feature_key="de_LDS", sessions=[1, 2, 3],
-        trials=val_trials)
+        root=config["data_root"],
+        feature_keys=["de_LDS"],
+        sessions=[1, 2, 3],
+        split="val",
+        train_ratio=config["train_ratio"],
+        val_ratio=config["val_ratio"],
+        seed=config.get("seed", 42),
+    )
+
     test_set = SeedIVFeatureDataset(
-        root=config["data_root"], feature_key="de_LDS", sessions=[1, 2, 3],
-        trials=test_trials)
-    
-    train_loader = DataLoader(
-        train_set, batch_size=config["batch_size"], shuffle=True)
-    val_loader = DataLoader(
-        val_set, batch_size=config["batch_size"], shuffle=False)
-    test_loader = DataLoader(
-        test_set, batch_size=config["batch_size"], shuffle=False)
-    
-    return train_loader, val_loader, test_loader, len(train_set), len(val_set), len(test_set)
+        root=config["data_root"],
+        feature_keys=["de_LDS"],
+        sessions=[1, 2, 3],
+        split="test",
+        train_ratio=config["train_ratio"],
+        val_ratio=config["val_ratio"],
+        seed=config.get("seed", 42),
+    )
+
+    return (
+        DataLoader(train_set, batch_size=config["batch_size"], shuffle=True),
+        DataLoader(val_set, batch_size=config["batch_size"], shuffle=False),
+        DataLoader(test_set, batch_size=config["batch_size"], shuffle=False),
+        len(train_set),
+        len(val_set),
+        len(test_set),
+    )
+
 
 # ================= One Experiment =================
 def run_one_experiment(exp_id: int, config: dict):
@@ -148,11 +141,11 @@ def run_one_experiment(exp_id: int, config: dict):
     model = DGCNN(
         num_electrodes=config["num_electrodes"],
         in_channels=config["in_channels"],
-        num_classes=config["num_classes"],
+        num_classes=config["num_classes"]
     ).to(device)
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=config["lr"])
+    optimizer = optim.Adam(model.parameters(), lr=config["lr"], weight_decay=1e-4)
 
     # ---------- Training ----------
     history = {
