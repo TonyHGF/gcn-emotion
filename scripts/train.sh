@@ -14,10 +14,10 @@ RUN_ENV="server"        # local | server
 # DATA_ROOT="/public/home/yangzhy22022/storage/datasets/seediv/eeg_feature_bands/dtabg"
 PROJECT_ROOT="/home_data/home/hugf2022/code/gcn-emotion"
 CONDA_ENV="emotion"
-DATA_ROOT="/public/home/hugf2022/emotion/seediv/eeg_feature_smooth"
+DATA_ROOT="/public/home/hugf2022/emotion/seediv/within-subject"
 
 # Output naming
-EXP_NAME="dgcnn_111"  # 修改这里区分不同实验
+EXP_NAME="dgcnn_subject1"  # 修改这里区分不同实验
 OUTPUT_ROOT="results"
 OUTPUT_DIR="${OUTPUT_ROOT}/${EXP_NAME}"
 CHECKPOINTS_FOLDER="checkpoints/${EXP_NAME}"
