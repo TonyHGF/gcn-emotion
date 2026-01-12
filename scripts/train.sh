@@ -6,18 +6,18 @@ set -e
 ########################################
 
 # Execution environment
-RUN_ENV="local"        # local | server
+RUN_ENV="server"        # local | server
 
 # Paths
-PROJECT_ROOT="/public/home/yangzhy22022/study/gcn-emotion"
-CONDA_ENV="gcn"
-DATA_ROOT="/public/home/yangzhy22022/storage/datasets/seediv/eeg_feature_bands/dtabg"
-# PROJECT_ROOT="/home_data/home/hugf2022/code/gcn-emotion"
-# CONDA_ENV="emotion"
-# DATA_ROOT="/public/home/hugf2022/emotion/seediv/eeg_feature_bands/dtabg"
+# PROJECT_ROOT="/public/home/yangzhy22022/study/gcn-emotion"
+# CONDA_ENV="gcn"
+# DATA_ROOT="/public/home/yangzhy22022/storage/datasets/seediv/eeg_feature_bands/dtabg"
+PROJECT_ROOT="/home_data/home/hugf2022/code/gcn-emotion"
+CONDA_ENV="emotion"
+DATA_ROOT="/public/home/hugf2022/emotion/seediv/eeg_feature_smooth"
 
 # Output naming
-EXP_NAME="pgcn_1e-1"  # 修改这里区分不同实验
+EXP_NAME="dgcnn_111"  # 修改这里区分不同实验
 OUTPUT_ROOT="results"
 OUTPUT_DIR="${OUTPUT_ROOT}/${EXP_NAME}"
 CHECKPOINTS_FOLDER="checkpoints/${EXP_NAME}"
@@ -26,7 +26,7 @@ CHECKPOINTS_FOLDER="checkpoints/${EXP_NAME}"
 # Training Hyperparameters
 ########################################
 
-MODEL="pgcn"
+MODEL="dgcnn"
 BATCH_SIZE=64
 LR=1e-1
 NUM_EPOCHS=50
@@ -73,7 +73,7 @@ CMD="python main.py \
 if [ "${RUN_ENV}" = "local" ]; then
   echo "[INFO] Running Training locally"
   cd "${PROJECT_ROOT}"
-  # source ~/anaconda3/bin/activate "${CONDA_ENV}"
+  source ~/anaconda3/bin/activate "${CONDA_ENV}"
   echo "[CMD] ${CMD}"
   eval "${CMD}"
 
