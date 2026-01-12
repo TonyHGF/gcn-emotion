@@ -6,15 +6,15 @@ set -e
 ########################################
 
 # Execution environment
-RUN_ENV="server"        # local | server
+RUN_ENV="local"        # local | server
 
 # Paths
-# PROJECT_ROOT="/public/home/yangzhy22022/study/gcn-emotion"
-# CONDA_ENV="gcn"
-# DATA_ROOT="/public/home/yangzhy22022/storage/datasets/seediv/eeg_feature_bands/dtabg"
-PROJECT_ROOT="/home_data/home/hugf2022/code/gcn-emotion"
-CONDA_ENV="emotion"
-DATA_ROOT="/public/home/hugf2022/emotion/seediv/eeg_feature_bands/dtabg"
+PROJECT_ROOT="/public/home/yangzhy22022/study/gcn-emotion"
+CONDA_ENV="gcn"
+DATA_ROOT="/public/home/yangzhy22022/storage/datasets/seediv/eeg_feature_bands/dtabg"
+# PROJECT_ROOT="/home_data/home/hugf2022/code/gcn-emotion"
+# CONDA_ENV="emotion"
+# DATA_ROOT="/public/home/hugf2022/emotion/seediv/eeg_feature_bands/dtabg"
 
 # Output naming
 EXP_NAME="pgcn_1e-1"  # 修改这里区分不同实验

@@ -18,24 +18,13 @@ def run_one_experiment(exp_id: int, config: dict):
     logger = logging.getLogger(f"Exp-{exp_id}")
     logger.info(f"Running experiment {exp_id}")
 
-    if config["split"] == "all":
-        split = all_mix_split
-    elif config["split"] == "loso":
-        split = loso_split
-    elif config["split"] == "within_subject":
-        # === NEW: Within Subject ===
-        # 我们把 exp_id 当作 subject_id 使用 (1-15)
-        # 如果 exp_id 超出了 15，你需要自己决定怎么映射，或者循环调用
-        subject_id = exp_id
-        if subject_id < 1 or subject_id > 15:
-            logger.warning(f"Exp ID {exp_id} is treated as Subject ID, but SEED-IV usually has 15 subjects.")
+    subject_id = exp_id
+    config["target_subject"] = subject_id
+
+    if "seed" not in config:
+        config["seed"] = 42
         
-        config["target_subject"] = subject_id
-        split = within_subject_split
-    else:
-        split = trial_split
-        
-    train_loader, val_loader, test_loader, num_train, num_val, num_test = split(config)
+    train_loader, val_loader, test_loader, num_train, num_val, num_test = within_subject_split(config)
     
     num_total = num_train + num_val + num_test
 
