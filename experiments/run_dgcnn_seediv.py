@@ -9,19 +9,14 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 import matplotlib.pyplot as plt
 
-from models import DGCNN
-from data import SeedIVFeatureDataset
-from utils import set_random_seed
-
-from data.datasets import all_mix_split, loso_split, trial_split, within_subject_split
+from models import DGCNN, PGCN
+from data import SeedIVFeatureDataset, all_mix_split, trial_split, loso_split, within_subject_split
 
 
 # ================= One Experiment =================
 def run_one_experiment(exp_id: int, config: dict):
     logger = logging.getLogger(f"Exp-{exp_id}")
     logger.info(f"Running experiment {exp_id}")
-
-    set_random_seed(exp_id)
 
     if config["split"] == "all":
         split = all_mix_split
@@ -61,14 +56,26 @@ def run_one_experiment(exp_id: int, config: dict):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
 
-    model = DGCNN(
-        num_electrodes=config["num_electrodes"],
-        in_channels=config["in_channels"],
-        num_classes=config["num_classes"],
-    ).to(device)
+    model = None
+    if config["model"] == "dgcnn":
+        model = DGCNN(
+            num_electrodes=config["num_electrodes"],
+            in_channels=config["in_channels"],
+            num_classes=config["num_classes"]
+        ).to(device)
+    elif config["model"] == "pgcn":
+        model = PGCN(
+            num_electrodes=config["num_electrodes"],
+            in_channels=config["in_channels"],
+            num_classes=config["num_classes"],
+            dropout_rate=config.get("dropout", 0.5),
+            lr=0.1
+        ).to(device)
+    else:
+        return None
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=config["lr"])
+    optimizer = optim.Adam(model.parameters(), lr=config["lr"], weight_decay=1e-4)
 
     # ---------- Training ----------
     history = {
