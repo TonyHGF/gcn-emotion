@@ -4,12 +4,13 @@
 import os
 import mne
 import torch
+import random
 import numpy as np
 import pandas as pd
 import scipy.io
 import logging
 
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader, random_split
 from typing import Dict, List, Tuple, Optional
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -106,6 +107,180 @@ class SeedIVFeatureDataset(Dataset):
         y = torch.tensor(y, dtype=torch.long)
         return x, y
 
+def within_subject_split(config):
+    """
+    Within-Subject Experiment Split:
+    - Subject: Single subject specified by config['target_subject']
+    - Train Pool: First 18 trials of each session (Indices 0-17)
+    - Test Pool: Last 6 trials of each session (Indices 18-23)
+    - Validation: Randomly split from Train Pool (e.g., 20%)
+    """
+    target_subject = config.get("target_subject")
+    if target_subject is None:
+        raise ValueError("config['target_subject'] must be provided for within-subject split.")
+
+    # 1. 定义 Trial 的 index 范围
+    # SEED-IV 约定：前18个做训练，后6个做测试
+    train_pool_indices = list(range(0, 18))  # 0 to 17
+    test_pool_indices = list(range(18, 24))  # 18 to 23
+    
+    # 2. 生成 (Session, Trial_Idx) 列表
+    # 这里的 train_pool_candidates 包含 3 * 18 = 54 个 trial
+    train_pool_candidates = []
+    test_trials = []
+    
+    for sess in [1, 2, 3]:
+        for t_idx in train_pool_indices:
+            train_pool_candidates.append((sess, t_idx))
+        for t_idx in test_pool_indices:
+            test_trials.append((sess, t_idx))
+            
+    # 3. 从 Train Pool 中划分 Validation Set
+    # 为了保证训练稳定性，我们设置随机种子进行打乱
+    # 注意：这里的 seed 应该固定，保证同一个人在不同超参实验中数据集是一样的
+    rng = random.Random(config.get("seed", 42))
+    rng.shuffle(train_pool_candidates)
+    
+    # 计算验证集大小 (例如 20% 的训练池)
+    val_ratio = config.get("val_ratio", 0.2)
+    num_val = int(len(train_pool_candidates) * val_ratio)
+    
+    val_trials = train_pool_candidates[:num_val]
+    train_trials = train_pool_candidates[num_val:]
+    
+    # 4. 创建 Dataset
+    # 关键点：subjects=[target_subject]，保证只加载这一个人的数据
+    # 然后用 allowed_trials (即 Dataset 中的 trials 参数) 来过滤具体的 trial
+    
+    # 训练集
+    train_set = SeedIVFeatureDataset(
+        root=config["data_root"],
+        feature_key="de_LDS",
+        sessions=[1, 2, 3],
+        subjects=[target_subject], # 只加载当前被试
+        trials=train_trials        # 只加载前18个中分出来的训练部分
+    )
+    
+    # 验证集
+    val_set = SeedIVFeatureDataset(
+        root=config["data_root"],
+        feature_key="de_LDS",
+        sessions=[1, 2, 3],
+        subjects=[target_subject],
+        trials=val_trials
+    )
+    
+    # 测试集 (固定的后6个)
+    test_set = SeedIVFeatureDataset(
+        root=config["data_root"],
+        feature_key="de_LDS",
+        sessions=[1, 2, 3],
+        subjects=[target_subject],
+        trials=test_trials
+    )
+    
+    # 5. Loaders
+    train_loader = DataLoader(train_set, batch_size=config["batch_size"], shuffle=True)
+    val_loader = DataLoader(val_set, batch_size=config["batch_size"], shuffle=False)
+    test_loader = DataLoader(test_set, batch_size=config["batch_size"], shuffle=False)
+    
+    return train_loader, val_loader, test_loader, len(train_set), len(val_set), len(test_set)
+
+def all_mix_split(config):
+    # ---------- Dataset ----------
+    dataset = SeedIVFeatureDataset(
+        root=config["data_root"],
+        feature_key="de_LDS",
+        sessions=[1, 2, 3],)
+
+    num_total = len(dataset)
+    num_train = int(num_total * config["train_ratio"])
+    num_val = int(num_total * config["val_ratio"])
+    num_test = num_total - num_train - num_val
+
+    train_set, val_set, test_set = random_split(
+        dataset, [num_train, num_val, num_test])
+
+    train_loader = DataLoader(
+        train_set, batch_size=config["batch_size"], shuffle=True)
+    val_loader = DataLoader(
+        val_set, batch_size=config["batch_size"], shuffle=False)
+    test_loader = DataLoader(
+        test_set, batch_size=config["batch_size"], shuffle=False)
+    
+    return train_loader, val_loader, test_loader, num_train, num_val, num_test
+
+# Divide based on subject
+def loso_split(config):
+    pick = random.randint(1, 15)
+    
+    # Test: 1
+    test_set = SeedIVFeatureDataset(
+        root=config["data_root"],
+        feature_key="de_LDS",
+        sessions=[1, 2, 3],
+        subjects=[pick])
+    #Train: 14
+    train_set = SeedIVFeatureDataset(
+        root=config["data_root"],
+        feature_key="de_LDS",
+        sessions=[1, 2, 3],
+        subjects=[i for i in range(1, 16) if (i != pick)])
+    
+    train_loader = DataLoader(
+        train_set, batch_size=config["batch_size"], shuffle=True)
+    test_loader = DataLoader(
+        test_set, batch_size=config["batch_size"], shuffle=False)
+
+    return train_loader, None, test_loader, len(train_set), 0, len(test_set)
+
+def trial_split(config):
+
+    def generate_balanced_trial_splits():
+        trials_by_label = {0: [], 1: [], 2: [], 3: []}
+        
+        for sess in [1, 2, 3]:
+            labels = session_labels[sess]
+            for idx, lbl in enumerate(labels):
+                trials_by_label[lbl].append((sess, idx))
+        
+        train_list, val_list, test_list = [], [], []
+
+        for lbl in [0, 1, 2, 3]:
+            trials = trials_by_label[lbl]
+            assert len(trials) == 18, f"Expected 18 trials for label {lbl}, got {len(trials)}"
+            random.shuffle(trials)
+
+            train_chunk = trials[:14]
+            val_chunk = trials[14:16]
+            test_chunk = trials[16:]
+
+            train_list.extend(train_chunk)
+            val_list.extend(val_chunk)
+            test_list.extend(test_chunk)
+        
+        return train_list, val_list, test_list
+    
+    train_trials, val_trials, test_trials = generate_balanced_trial_splits()
+
+    train_set = SeedIVFeatureDataset(
+        root=config["data_root"], feature_key="de_LDS", sessions=[1, 2, 3],
+        trials=train_trials)
+    val_set = SeedIVFeatureDataset(
+        root=config["data_root"], feature_key="de_LDS", sessions=[1, 2, 3],
+        trials=val_trials)
+    test_set = SeedIVFeatureDataset(
+        root=config["data_root"], feature_key="de_LDS", sessions=[1, 2, 3],
+        trials=test_trials)
+    
+    train_loader = DataLoader(
+        train_set, batch_size=config["batch_size"], shuffle=True)
+    val_loader = DataLoader(
+        val_set, batch_size=config["batch_size"], shuffle=False)
+    test_loader = DataLoader(
+        test_set, batch_size=config["batch_size"], shuffle=False)
+    
+    return train_loader, val_loader, test_loader, len(train_set), len(val_set), len(test_set)
 
 class EEGDatasetBase(Dataset):
     """

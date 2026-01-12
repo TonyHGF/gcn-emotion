@@ -13,103 +13,8 @@ from models import DGCNN
 from data import SeedIVFeatureDataset
 from utils import set_random_seed
 
-from data.datasets import session_labels
+from data.datasets import all_mix_split, loso_split, trial_split, within_subject_split
 
-def all_mix_split(config):
-    # ---------- Dataset ----------
-    dataset = SeedIVFeatureDataset(
-        root=config["data_root"],
-        feature_key="de_LDS",
-        sessions=[1, 2, 3],)
-
-    num_total = len(dataset)
-    num_train = int(num_total * config["train_ratio"])
-    num_val = int(num_total * config["val_ratio"])
-    num_test = num_total - num_train - num_val
-
-    train_set, val_set, test_set = random_split(
-        dataset, [num_train, num_val, num_test])
-
-    train_loader = DataLoader(
-        train_set, batch_size=config["batch_size"], shuffle=True)
-    val_loader = DataLoader(
-        val_set, batch_size=config["batch_size"], shuffle=False)
-    test_loader = DataLoader(
-        test_set, batch_size=config["batch_size"], shuffle=False)
-    
-    return train_loader, val_loader, test_loader, num_train, num_val, num_test
-
-# Divide based on subject
-def loso_split(config):
-    pick = random.randint(1, 15)
-    
-    # Test: 1
-    test_set = SeedIVFeatureDataset(
-        root=config["data_root"],
-        feature_key="de_LDS",
-        sessions=[1, 2, 3],
-        subjects=[pick])
-    #Train: 14
-    train_set = SeedIVFeatureDataset(
-        root=config["data_root"],
-        feature_key="de_LDS",
-        sessions=[1, 2, 3],
-        subjects=[i for i in range(1, 16) if (i != pick)])
-    
-    train_loader = DataLoader(
-        train_set, batch_size=config["batch_size"], shuffle=True)
-    test_loader = DataLoader(
-        test_set, batch_size=config["batch_size"], shuffle=False)
-
-    return train_loader, None, test_loader, len(train_set), 0, len(test_set)
-
-def trial_split(config):
-
-    def generate_balanced_trial_splits():
-        trials_by_label = {0: [], 1: [], 2: [], 3: []}
-        
-        for sess in [1, 2, 3]:
-            labels = session_labels[sess]
-            for idx, lbl in enumerate(labels):
-                trials_by_label[lbl].append((sess, idx))
-        
-        train_list, val_list, test_list = [], [], []
-
-        for lbl in [0, 1, 2, 3]:
-            trials = trials_by_label[lbl]
-            assert len(trials) == 18, f"Expected 18 trials for label {lbl}, got {len(trials)}"
-            random.shuffle(trials)
-
-            train_chunk = trials[:14]
-            val_chunk = trials[14:16]
-            test_chunk = trials[16:]
-
-            train_list.extend(train_chunk)
-            val_list.extend(val_chunk)
-            test_list.extend(test_chunk)
-        
-        return train_list, val_list, test_list
-    
-    train_trials, val_trials, test_trials = generate_balanced_trial_splits()
-
-    train_set = SeedIVFeatureDataset(
-        root=config["data_root"], feature_key="de_LDS", sessions=[1, 2, 3],
-        trials=train_trials)
-    val_set = SeedIVFeatureDataset(
-        root=config["data_root"], feature_key="de_LDS", sessions=[1, 2, 3],
-        trials=val_trials)
-    test_set = SeedIVFeatureDataset(
-        root=config["data_root"], feature_key="de_LDS", sessions=[1, 2, 3],
-        trials=test_trials)
-    
-    train_loader = DataLoader(
-        train_set, batch_size=config["batch_size"], shuffle=True)
-    val_loader = DataLoader(
-        val_set, batch_size=config["batch_size"], shuffle=False)
-    test_loader = DataLoader(
-        test_set, batch_size=config["batch_size"], shuffle=False)
-    
-    return train_loader, val_loader, test_loader, len(train_set), len(val_set), len(test_set)
 
 # ================= One Experiment =================
 def run_one_experiment(exp_id: int, config: dict):
@@ -122,8 +27,19 @@ def run_one_experiment(exp_id: int, config: dict):
         split = all_mix_split
     elif config["split"] == "loso":
         split = loso_split
+    elif config["split"] == "within_subject":
+        # === NEW: Within Subject ===
+        # 我们把 exp_id 当作 subject_id 使用 (1-15)
+        # 如果 exp_id 超出了 15，你需要自己决定怎么映射，或者循环调用
+        subject_id = exp_id
+        if subject_id < 1 or subject_id > 15:
+            logger.warning(f"Exp ID {exp_id} is treated as Subject ID, but SEED-IV usually has 15 subjects.")
+        
+        config["target_subject"] = subject_id
+        split = within_subject_split
     else:
         split = trial_split
+        
     train_loader, val_loader, test_loader, num_train, num_val, num_test = split(config)
     
     num_total = num_train + num_val + num_test

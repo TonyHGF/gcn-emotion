@@ -100,17 +100,20 @@ def main():
 
         all_test_acc = []
 
-        for exp_id in range(args.exp_times):
-            acc = run_one_experiment(exp_id + 1, config)
+        for exp_id in range(1, args.exp_times+1):
+            print(f"\n========== Training Subject {exp_id} ==========")
+            # 这里的 sub_id 传给 run_one_experiment 的 exp_id
+            acc = run_one_experiment(exp_id, config)
             all_test_acc.append(acc)
 
-        logging.info("========== Final Summary ==========")
-        logging.info(f"Experiment Times: {args.exp_times}")
-        logging.info(f"Test Accuracies: {all_test_acc}")
-        logging.info(
-            f"Mean = {np.mean(all_test_acc):.4f}, "
-            f"Std = {np.std(all_test_acc):.4f}"
-        )
+        avg_acc = np.mean(all_test_acc)
+        std_acc = np.std(all_test_acc)
+    
+        print("\n========================================")
+        print(f"Within-Subject Experiment Finished.")
+        print(f"Accuracies per subject: {all_test_acc}")
+        print(f"Average Accuracy: {avg_acc:.4f} ± {std_acc:.4f}")
+        print("========================================")
 
     elif args.mode == "explain" and args.model == "dgcnn":
         if args.checkpoint_path is None:

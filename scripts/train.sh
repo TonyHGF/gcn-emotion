@@ -28,12 +28,12 @@ BATCH_SIZE=64
 LR=1e-3
 NUM_EPOCHS=50
 TRAIN_RATIO=0.7
-VAL_RATIO=0.15
-EXP_TIMES=1
+VAL_RATIO=0.2
+EXP_TIMES=15
 NUM_ELECTRODES=62
 IN_CHANNELS=5
 NUM_CLASSES=4
-SPLIT="trial"
+SPLIT="within_subject"
 
 ########################################
 # Prepare output directory
